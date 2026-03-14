@@ -1,0 +1,39 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: videotube-redis
+    ports:
+      - '6379:6379'
+    networks:
+      - videotube-network
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    container_name: videotube-server
+    ports:
+      - '8000:8000'
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - videotube-network
+    environment:
+      - REDIS_URL=redis://videotube-redis:6379
+    volumes:
+      - server-temp:/app/apps/server/public/temp
+
+networks:
+  videotube-network:
+    driver: bridge
+
+volumes:
+  server-temp:

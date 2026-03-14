@@ -1,0 +1,26 @@
+{
+  "name": "videotube",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A fullstack YouTube-like video platform",
+  "author": "Sarthak Singh Choudhary",
+  "license": "ISC",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev -w apps/server",
+    "dev:client": "npm run dev -w apps/client",
+    "dev": "npm run dev:server & npm run dev:client",
+    "build:shared": "npm run build -w packages/shared",
+    "build:server": "npm run build -w apps/server",
+    "build:client": "npm run build -w apps/client",
+    "build": "npm run build:shared && npm run build:server && npm run build:client",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2"
+  }
+}
