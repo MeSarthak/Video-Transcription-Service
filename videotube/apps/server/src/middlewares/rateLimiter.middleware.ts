@@ -12,6 +12,7 @@ export const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.path === '/api/v1/health',
+  validate: { keyGeneratorIpFallback: false },
 });
 
 /**
@@ -25,6 +26,7 @@ export const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
+  validate: { keyGeneratorIpFallback: false },
 });
 
 /**
@@ -37,6 +39,7 @@ export const uploadLimiter = rateLimit({
   message: 'Too many file uploads, please try again after an hour.',
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { keyGeneratorIpFallback: false },
 });
 
 /**
@@ -50,6 +53,7 @@ export const readLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.method !== 'GET',
+  validate: { keyGeneratorIpFallback: false },
 });
 
 /**
@@ -73,6 +77,7 @@ export const userLimiter = rateLimit({
     if (user?._id) return user._id.toString();
     return req.ip ?? 'unknown';
   },
+  validate: { keyGeneratorIpFallback: false },
 });
 
 /**
@@ -89,4 +94,5 @@ export const viewsLimiter = rateLimit({
     const videoId = req.params.videoId ?? req.originalUrl;
     return `${req.ip ?? 'unknown'}-${videoId}`;
   },
+  validate: { keyGeneratorIpFallback: false },
 });

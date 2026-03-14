@@ -1,4 +1,21 @@
+version: '3.8'
+
 services:
+  mongodb:
+    image: mongo:7.0
+    container_name: videotube-mongodb
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - videotube-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     container_name: videotube-redis
@@ -20,16 +37,36 @@ services:
     ports:
       - '8000:8000'
     env_file:
-      - .env
+      - apps/server/.env
     depends_on:
       redis:
+        condition: service_healthy
+      mongodb:
         condition: service_healthy
     networks:
       - videotube-network
     environment:
+      - MONGODB_URI=mongodb://videotube-mongodb:27017/videotube
       - REDIS_URL=redis://videotube-redis:6379
+      - NODE_ENV=development
     volumes:
       - server-temp:/app/apps/server/public/temp
+
+  web:
+    image: node:20-alpine
+    container_name: videotube-web
+    working_dir: /app
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/apps/web/node_modules
+    ports:
+      - '5173:5173'
+    networks:
+      - videotube-network
+    environment:
+      - VITE_API_URL=http://videotube-server:8000
+    command: sh -c "npm install && npm run dev:web -- --host 0.0.0.0"
 
 networks:
   videotube-network:
@@ -37,3 +74,4 @@ networks:
 
 volumes:
   server-temp:
+  mongodb_data:

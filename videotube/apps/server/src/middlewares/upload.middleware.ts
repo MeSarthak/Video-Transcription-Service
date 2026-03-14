@@ -1,6 +1,6 @@
 import multer from 'multer';
 import path from 'node:path';
-import { readFile, unlink } from 'node:fs/promises';
+import { unlink } from 'node:fs/promises';
 import { fileTypeFromBuffer } from 'file-type';
 import { ALLOWED_MIMES, UPLOAD_LIMITS } from '@videotube/shared';
 import type { Request, Response, NextFunction } from 'express';
@@ -86,6 +86,7 @@ export async function validateFileSignature(
   try {
     for (const file of files) {
       const fieldName = file.fieldname;
+      console.log(`[validateFileSignature] field=${fieldName} path=${file.path} size=${file.size}`);
 
       let allowedList: readonly string[] = [];
       if (fieldName === 'video') {
@@ -96,14 +97,25 @@ export async function validateFileSignature(
         continue;
       }
 
-      // Read from path (disk) or buffer (memory)
-      const buffer = file.path
-        ? await readFile(file.path)
-        : file.buffer;
+      // Only read first 4100 bytes for magic-byte detection — no need to load entire file
+      const { createReadStream } = await import('node:fs');
+      const buffer = await new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        let total = 0;
+        const stream = createReadStream(file.path, { start: 0, end: 4099 });
+        stream.on('data', (chunk) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          total += chunk.length;
+        });
+        stream.on('end', () => resolve(Buffer.concat(chunks)));
+        stream.on('error', reject);
+      });
 
       const detected = await fileTypeFromBuffer(buffer);
+      console.log(`[validateFileSignature] detected=${JSON.stringify(detected)} allowed=${allowedList.join(',')}`);
 
       if (!detected || !allowedList.includes(detected.mime)) {
+        console.log(`[validateFileSignature] REJECTED field=${fieldName} detected=${detected?.mime}`);
         if (file.path) await unlink(file.path).catch(() => {});
         res.status(400).json({
           statusCode: 400,
@@ -119,7 +131,8 @@ export async function validateFileSignature(
     }
 
     next();
-  } catch {
+  } catch (err: any) {
+    console.error('[validateFileSignature] ERROR:', err.message);
     res.status(400).json({
       statusCode: 400,
       data: null,

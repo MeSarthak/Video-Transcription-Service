@@ -2,7 +2,7 @@
  * Server entry point.
  *
  * Boot sequence:
- *   1. Validate env (happens on import of config/env)
+ *   1. Validate env (happens on import of config/env — dotenv is loaded there)
  *   2. Connect to MongoDB
  *   3. Ensure temp directory
  *   4. Start HTTP server
@@ -15,6 +15,7 @@ import { connectDB, disconnectDB } from './config/db.js';
 import { disconnectRedis } from './config/redis.js';
 import { configureCloudinary } from './config/cloudinary.js';
 import { logger } from './lib/logger.js';
+import './workers/video.worker.js';
 import type { Server } from 'node:http';
 
 // ── Global error handlers ───────────────────

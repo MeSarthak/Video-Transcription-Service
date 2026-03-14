@@ -10,17 +10,18 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:server": "npm run dev -w apps/server",
-    "dev:client": "npm run dev -w apps/client",
-    "dev": "npm run dev:server & npm run dev:client",
+    "dev:server": "npx tsx watch --exclude './apps/server/public/**' apps/server/src/index.ts",
+    "dev:web": "npx vite apps/web",
+    "dev": "concurrently --raw --kill-others-on-fail \"npx tsx watch --exclude './apps/server/public/**' apps/server/src/index.ts\" \"cmd /d /c cd /d apps\\\\web ^& node_modules\\\\.bin\\\\vite.cmd\"",
     "build:shared": "npm run build -w packages/shared",
     "build:server": "npm run build -w apps/server",
-    "build:client": "npm run build -w apps/client",
-    "build": "npm run build:shared && npm run build:server && npm run build:client",
+    "build:web": "npm run build -w apps/web",
+    "build": "npm run build:shared && npm run build:server && npm run build:web",
     "lint": "npm run lint --workspaces --if-present",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "prettier": "^3.4.2"
   }
 }

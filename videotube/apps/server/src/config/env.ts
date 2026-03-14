@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import { config } from 'dotenv';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+// Load .env relative to apps/server/ so this works regardless of the CWD
+// (npm workspaces runs scripts from the repo root, not the package root).
+// This must happen before the Zod parse below.
+config({ path: join(dirname(fileURLToPath(import.meta.url)), '..', '..', '.env') });
 
 /**
  * Zod schema for all environment variables.
