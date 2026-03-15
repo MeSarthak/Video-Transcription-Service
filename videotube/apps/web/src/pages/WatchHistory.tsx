@@ -1,8 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { History, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { fetchWatchHistory, queryKeys } from "../lib/queries";
 import { useAuth } from "../context/AuthContext";
+import { SkeletonRelatedRow } from "../components/ui/Skeleton";
 import api from "../lib/api";
 import type { Video } from "../types";
 
@@ -84,14 +86,7 @@ export function WatchHistory() {
       {isLoading && (
         <div className="space-y-3">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex gap-3 animate-pulse">
-              <div className="w-40 aspect-video bg-gray-200 dark:bg-gray-700 rounded-lg flex-shrink-0" />
-              <div className="flex-1 space-y-2 py-1">
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/3" />
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/4" />
-              </div>
-            </div>
+            <SkeletonRelatedRow key={i} />
           ))}
         </div>
       )}
@@ -111,52 +106,61 @@ export function WatchHistory() {
 
       {!isLoading && !isError && entries.length > 0 && (
         <div className="space-y-3">
-          {entries.map((entry, i) => {
-            const video: Video | undefined = entry.video;
-            if (!video) return null;
-            const owner = video.owner;
-            return (
-              <Link
-                key={`${video._id}-${i}`}
-                to={`/watch/${video._id}`}
-                className="flex gap-3 group p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              >
-                {/* Thumbnail */}
-                <div className="relative w-40 aspect-video bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden flex-shrink-0">
-                  {video.thumbnail ? (
-                    <img
-                      src={video.thumbnail}
-                      alt={video.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
-                      No thumbnail
+          <AnimatePresence initial={false}>
+            {entries.map((entry, i) => {
+              const video: Video | undefined = entry.video;
+              if (!video) return null;
+              const owner = video.owner;
+              return (
+                <motion.div
+                  key={`${video._id}-${i}`}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2, ease: "easeOut", delay: Math.min(i * 0.03, 0.3) }}
+                >
+                  <Link
+                    to={`/watch/${video._id}`}
+                    className="flex gap-3 group p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    {/* Thumbnail */}
+                    <div className="relative w-40 aspect-video bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden flex-shrink-0">
+                      {video.thumbnail ? (
+                        <img
+                          src={video.thumbnail}
+                          alt={video.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                          No thumbnail
+                        </div>
+                      )}
+                      {video.duration && (
+                        <span className="absolute bottom-1 right-1 bg-black/80 text-white text-xs px-1 py-0.5 rounded">
+                          {formatDuration(video.duration)}
+                        </span>
+                      )}
                     </div>
-                  )}
-                  {video.duration && (
-                    <span className="absolute bottom-1 right-1 bg-black/80 text-white text-xs px-1 py-0.5 rounded">
-                      {formatDuration(video.duration)}
-                    </span>
-                  )}
-                </div>
 
-                {/* Meta */}
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2">
-                    {video.title}
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {owner?.fullname}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    Watched {timeAgo(entry.watchedAt)}
-                  </p>
-                </div>
-              </Link>
-            );
-          })}
+                    {/* Meta */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2">
+                        {video.title}
+                      </h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {owner?.fullname}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Watched {timeAgo(entry.watchedAt)}
+                      </p>
+                    </div>
+                  </Link>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         </div>
       )}
     </div>

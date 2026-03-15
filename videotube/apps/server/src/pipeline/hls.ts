@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import { stat } from "node:fs/promises";
 import * as path from "node:path";
 import { hasAudioTrack } from "./ffprobe.js";
+import { TEMP_DIR } from "./paths.js";
 
 // Validate videoId to prevent path traversal
 const validateVideoId = (videoId: string) => {
@@ -28,11 +29,11 @@ export const generateHLS = async (inputPath: string, videoId: string): Promise<a
     if (!fileStat.isFile()) {
       throw new Error("inputPath must be a regular file");
     }
-  } catch (err: any) {
-    throw new Error(`inputPath does not exist or is not accessible: ${err.message}`);
+  } catch (err: unknown) {
+    throw new Error(`inputPath does not exist or is not accessible: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  const intendedRoot = path.resolve("public", "temp");
+  const intendedRoot = TEMP_DIR;
   const resolved = path.resolve(intendedRoot, videoId);
 
   // Verify resolved path is inside intended root with separator-aware check

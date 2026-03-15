@@ -6,6 +6,8 @@ import { getVideoDuration } from "./duration.js";
 import { v4 as uuidv4 } from "uuid";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { TEMP_DIR } from "./paths.js";
+import { logger } from "../lib/logger.js";
 
 // Transcription imports
 import {
@@ -21,62 +23,65 @@ interface TranscriptionOptions {
   thumbnailPath?: string;
 }
 
+interface AudioExtractionResult {
+  audioPath: string;
+  duration: number;
+}
+
+interface TranscriptionResult {
+  segments: Array<{ start: number; end: number; text: string }>;
+  detectedLanguage: string;
+}
+
 /**
  * Generate transcription and subtitles for a video
- *
- * @param {string} videoPath - Path to the video file
- * @param {string} videoId - Video ID for output organization
- * @param {TranscriptionOptions} options - Transcription options
- * @returns {Promise<{files: any, detectedLanguage: string, segmentCount: number}>}
  */
-const generateTranscription = async (videoPath: string, videoId: string, options: TranscriptionOptions = {}) => {
+const generateTranscription = async (
+  videoPath: string,
+  videoId: string,
+  options: TranscriptionOptions = {},
+) => {
   const { language = "auto", task = "transcribe" } = options;
 
   // Check if Whisper is available
   const whisperAvailable = await checkWhisperCli();
   if (!whisperAvailable) {
     throw new Error(
-      "Whisper CLI is not installed. Run: pip install openai-whisper"
+      "Whisper CLI is not installed. Run: pip install openai-whisper",
     );
   }
 
   // Create output directory for transcription
-  const transcriptionDir = path.join("./public/temp", videoId, "transcription");
+  const transcriptionDir = path.join(TEMP_DIR, videoId, "transcription");
   if (!fs.existsSync(transcriptionDir)) {
     fs.mkdirSync(transcriptionDir, { recursive: true });
   }
 
-  console.log(`[Transcription] Starting transcription for video ${videoId}`);
-  console.log(`[Transcription] Language: ${language}, Task: ${task}`);
+  logger.info({ videoId }, "Transcription: starting");
+  logger.info({ language, task }, "Transcription: options");
 
   // Step 1: Extract audio from video
-  console.log(`[Transcription] Step 1: Extracting audio...`);
-  // @ts-ignore
-  const { audioPath, duration } = await extractAudio(
+  logger.info({ videoId }, "Transcription: step 1 — extracting audio");
+  const { audioPath, duration } = (await extractAudio(
     videoPath,
-    transcriptionDir
-  );
-  console.log(`[Transcription] Audio extracted: ${audioPath} (${duration}s)`);
+    transcriptionDir,
+  )) as AudioExtractionResult;
+  logger.info({ audioPath, duration }, "Transcription: audio extracted");
 
   // Step 2: Transcribe audio using Whisper
-  console.log(`[Transcription] Step 2: Transcribing with Whisper...`);
-  // @ts-ignore
-  const { segments, detectedLanguage } = await transcribeWithProgress(
+  logger.info({ videoId }, "Transcription: step 2 — transcribing with Whisper");
+  const { segments, detectedLanguage } = (await transcribeWithProgress(
     audioPath,
-    duration as number,
-    // @ts-ignore
+    duration,
     (progress: number) => {
-      console.log(`[Transcription] Progress: ${progress}%`);
+      logger.debug({ progress }, "Transcription: progress");
     },
-    { language, task, outputDir: transcriptionDir }
-  );
-  console.log(
-    `[Transcription] Transcription complete. Detected language: ${detectedLanguage}`
-  );
-  console.log(`[Transcription] Generated ${segments.length} segments`);
+    { language, task, outputDir: transcriptionDir },
+  )) as TranscriptionResult;
+  logger.info({ detectedLanguage, segmentCount: segments.length }, "Transcription: complete");
 
   // Step 3: Generate subtitle files (SRT, VTT, JSON, TXT)
-  console.log(`[Transcription] Step 3: Generating subtitle files...`);
+  logger.info({ videoId }, "Transcription: step 3 — generating subtitle files");
   const subtitleFiles = await generateAllFormats(
     segments,
     transcriptionDir,
@@ -86,17 +91,18 @@ const generateTranscription = async (videoPath: string, videoId: string, options
       detectedLanguage,
       task,
       videoId,
-      duration: duration as number,
-    }
+      duration,
+    },
   );
-  console.log(`[Transcription] Subtitle files generated`);
+  logger.info({ videoId }, "Transcription: subtitle files generated");
 
   // Step 4: Upload subtitle files to Azure
-  console.log(
-    `[Transcription] Step 4: Uploading subtitle files to cloud storage...`
+  logger.info({ videoId }, "Transcription: step 4 — uploading subtitle files");
+  const uploadedSubtitles = await uploadSubtitleFiles(
+    subtitleFiles as Record<string, string>,
+    videoId,
   );
-  const uploadedSubtitles = await uploadSubtitleFiles(subtitleFiles, videoId);
-  console.log(`[Transcription] Subtitle files uploaded`);
+  logger.info({ videoId }, "Transcription: subtitle files uploaded");
 
   // Cleanup: Remove local transcription files
   try {
@@ -104,17 +110,20 @@ const generateTranscription = async (videoPath: string, videoId: string, options
       fs.unlinkSync(audioPath);
     }
     // Clean up subtitle files after upload
-    Object.values(subtitleFiles).forEach((filePath) => {
-      if (fs.existsSync(filePath as string)) {
-        fs.unlinkSync(filePath as string);
+    Object.values(subtitleFiles as Record<string, string>).forEach((filePath) => {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
       }
     });
     // Remove transcription directory if empty
     if (fs.existsSync(transcriptionDir)) {
-      fs.rmdirSync(transcriptionDir, { recursive: true });
+      fs.rmdirSync(transcriptionDir, { recursive: true } as fs.RmDirOptions);
     }
-  } catch (cleanupErr: any) {
-    console.warn(`[Transcription] Cleanup warning: ${cleanupErr.message}`);
+  } catch (cleanupErr: unknown) {
+    logger.warn(
+      { err: cleanupErr },
+      "Transcription: cleanup warning",
+    );
   }
 
   return {
@@ -127,7 +136,7 @@ const generateTranscription = async (videoPath: string, videoId: string, options
 const processVideo = async (
   videoPath: string,
   existingVideoId?: string,
-  subtitleOptions: TranscriptionOptions = {}
+  subtitleOptions: TranscriptionOptions = {},
 ) => {
   // Normalize path separators to forward slashes for cross-platform FFmpeg compatibility.
   // On Windows, multer produces backslash paths (e.g. public\temp\video.mp4) which
@@ -139,127 +148,120 @@ const processVideo = async (
   let baseFolder: string | undefined;
 
   try {
-    console.log(
-      `[VideoProcessor] Starting processVideo for videoId: ${videoId}`
-    );
-    console.log(`[VideoProcessor] Local video path: ${normalizedPath}`);
+    logger.info({ videoId }, "VideoProcessor: starting processVideo");
+    logger.info({ normalizedPath }, "VideoProcessor: local video path");
 
-    // First await generateHLS to capture baseFolder
-    console.log(`[VideoProcessor] Step 1: Generating HLS segments...`);
+    // Step 1: Generate HLS segments
+    logger.info({ videoId }, "VideoProcessor: step 1 — generating HLS segments");
     const hlsResult = await generateHLS(normalizedPath, videoId);
     baseFolder = hlsResult.baseFolder;
     const variants = hlsResult.variants;
-    console.log(
-      `[VideoProcessor] HLS generation complete. Base folder: ${baseFolder}`
-    );
+    logger.info({ baseFolder }, "VideoProcessor: HLS generation complete");
 
-    // Then run thumbnail and duration in parallel
-    console.log(
-      `[VideoProcessor] Step 2: Generating Thumbnail and calculating Duration...`
-    );
+    // Step 2: Generate thumbnail and calculate duration
+    logger.info({ videoId }, "VideoProcessor: step 2 — generating thumbnail and duration");
 
     let thumbnailLocal: string;
-    if (subtitleOptions.thumbnailPath && fs.existsSync(subtitleOptions.thumbnailPath)) {
+    if (
+      subtitleOptions.thumbnailPath &&
+      fs.existsSync(subtitleOptions.thumbnailPath)
+    ) {
       // User supplied a thumbnail — copy it into the expected location
-      const outDir = path.join("public", "temp", videoId);
+      const outDir = path.join(TEMP_DIR, videoId);
       fs.mkdirSync(outDir, { recursive: true });
       const destPath = path.join(outDir, "thumb.jpg");
       fs.copyFileSync(subtitleOptions.thumbnailPath, destPath);
       // Clean up the uploaded thumbnail temp file
-      try { fs.unlinkSync(subtitleOptions.thumbnailPath); } catch {}
+      try {
+        fs.unlinkSync(subtitleOptions.thumbnailPath);
+      } catch {}
       thumbnailLocal = destPath;
-      console.log(`[VideoProcessor] Using user-supplied thumbnail: ${thumbnailLocal}`);
+      logger.info({ thumbnailLocal }, "VideoProcessor: using user-supplied thumbnail");
     } else {
-      thumbnailLocal = await generateThumbnail(normalizedPath, videoId) as string;
-      console.log(`[VideoProcessor] Thumbnail generated: ${thumbnailLocal}`);
+      thumbnailLocal = (await generateThumbnail(normalizedPath, videoId)) as string;
+      logger.info({ thumbnailLocal }, "VideoProcessor: thumbnail generated");
     }
 
     const duration = await getVideoDuration(normalizedPath);
-    console.log(`[VideoProcessor] Video Duration: ${duration}`);
+    logger.info({ duration }, "VideoProcessor: video duration");
 
-    // Step 4: Master playlist generate
-    console.log(`[VideoProcessor] Step 3: Generating Master Playlist...`);
+    // Step 3: Generate master playlist
+    logger.info({ videoId }, "VideoProcessor: step 3 — generating master playlist");
     await generateMasterPlaylist(videoId, variants);
-    console.log(`[VideoProcessor] Master Playlist generated.`);
+    logger.info({ videoId }, "VideoProcessor: master playlist generated");
 
-    // Step 5: Upload folder -> Azure Blob Storage
-    console.log(
-      `[VideoProcessor] Step 4: Uploading HLS folder to Cloud Storage...`
-    );
+    // Step 4: Upload HLS folder to Azure Blob Storage
+    logger.info({ videoId }, "VideoProcessor: step 4 — uploading HLS folder");
     const uploadedMap = await uploadHLSFolder(baseFolder, videoId);
-    console.log(
-      `[VideoProcessor] Upload complete. ${Object.keys(uploadedMap).length} files uploaded.`
-    );
+    logger.info({ count: Object.keys(uploadedMap).length }, "VideoProcessor: upload complete");
 
     const masterBlob = `${videoId}/master.m3u8`;
     const thumbnailBlob = `${videoId}/thumb.jpg`;
 
-    // Step 6: Generate transcription and subtitles (non-blocking for video processing)
-    let transcriptionResult: any = null;
+    // Step 5: Generate transcription and subtitles (non-blocking for video processing)
+    let transcriptionResult: {
+      error?: string;
+      files: Record<string, string> | null;
+      detectedLanguage: string | null;
+      segmentCount: number;
+    } | null = null;
     const { language = "auto", task = "transcribe" } = subtitleOptions;
 
     try {
-      console.log(
-        `[VideoProcessor] Step 5: Generating transcription and subtitles...`
-      );
+      logger.info({ videoId }, "VideoProcessor: step 5 — generating transcription");
       transcriptionResult = await generateTranscription(normalizedPath, videoId, {
         language,
         task,
       });
-      console.log(
-        `[VideoProcessor] Transcription complete. Detected: ${transcriptionResult.detectedLanguage}`
+      logger.info(
+        { detectedLanguage: transcriptionResult.detectedLanguage },
+        "VideoProcessor: transcription complete",
       );
-    } catch (transcriptionError: any) {
+    } catch (transcriptionError: unknown) {
       // Log error but don't fail the entire video processing
-      console.error(
-        `[VideoProcessor] Transcription failed (non-fatal): ${transcriptionError.message}`
-      );
+      const errorMessage =
+        transcriptionError instanceof Error
+          ? transcriptionError.message
+          : String(transcriptionError);
+      logger.error({ err: transcriptionError }, "VideoProcessor: transcription failed (non-fatal)");
       transcriptionResult = {
-        error: transcriptionError.message,
+        error: errorMessage,
         files: null,
         detectedLanguage: null,
         segmentCount: 0,
       };
     }
 
-    console.log(
-      `[VideoProcessor] Video processing finished successfully for ${videoId}`
-    );
+    logger.info({ videoId }, "VideoProcessor: video processing finished successfully");
 
     return {
       videoId,
       duration,
       variants,
-      // @ts-ignore
-      masterUrl: uploadedMap[masterBlob] || masterBlob,
-      // @ts-ignore
-      thumbnailUrl: uploadedMap[thumbnailBlob] || thumbnailBlob,
+      masterUrl: uploadedMap[masterBlob] ?? masterBlob,
+      thumbnailUrl: uploadedMap[thumbnailBlob] ?? thumbnailBlob,
       uploadedFiles: uploadedMap,
-      // Transcription results
       transcription: transcriptionResult,
     };
   } catch (err) {
-    console.error(
-      `[VideoProcessor] Video Processing Failed for ${videoId}:`,
-      err
-    );
+    logger.error({ videoId, err }, "VideoProcessor: video processing failed");
     throw err;
   } finally {
     // Wrap cleanup in try-catch to prevent masking original error
     try {
       // Cleanup local temp folder
       if (baseFolder && fs.existsSync(baseFolder)) {
-        console.log(`[VideoProcessor] Cleaning up temp folder: ${baseFolder}`);
+        logger.info({ baseFolder }, "VideoProcessor: cleaning up temp folder");
         fs.rmSync(baseFolder, { recursive: true, force: true });
       }
       // Cleanup the uploaded original video file from disk
       if (normalizedPath && fs.existsSync(normalizedPath)) {
-        // console.log(`[VideoProcessor] Cleaning up original video file: ${normalizedPath}`);
-        // fs.unlinkSync(normalizedPath);
+        logger.info({ normalizedPath }, "VideoProcessor: cleaning up original video file");
+        fs.unlinkSync(normalizedPath);
       }
     } catch (cleanupErr) {
       // Log cleanup errors but don't throw to preserve original error
-      console.error("[VideoProcessor] Cleanup error:", cleanupErr);
+      logger.error({ err: cleanupErr }, "VideoProcessor: cleanup error");
     }
   }
 };

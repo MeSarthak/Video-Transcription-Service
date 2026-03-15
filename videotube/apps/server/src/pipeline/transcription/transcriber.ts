@@ -30,10 +30,8 @@ const WHISPER_MODEL = process.env.WHISPER_MODEL || "base";
  * Check if CUDA (GPU) is available
  * Caches the result after first check
  */
-// @ts-ignore
-let cudaAvailable = null;
-export function checkCudaAvailable() {
-  // @ts-ignore
+let cudaAvailable: boolean | null = null;
+export function checkCudaAvailable(): boolean {
   if (cudaAvailable !== null) return cudaAvailable;
 
   try {
@@ -66,13 +64,21 @@ export function checkCudaAvailable() {
  * @param {string} options.outputDir - Output directory for Whisper files
  * @returns {Promise<{segments: Array, detectedLanguage: string}>}
  */
-export async function transcribe(audioPath: any, options = {}) {
+interface TranscribeOptions {
+  language?: string;
+  task?: 'transcribe' | 'translate';
+  outputDir?: string;
+}
+
+interface TranscribeResult {
+  segments: { start: number; end: number; speech: string }[];
+  detectedLanguage: string;
+}
+
+export async function transcribe(audioPath: string, options: TranscribeOptions = {}): Promise<TranscribeResult> {
   const {
-    // @ts-ignore
     language = "auto",
-    // @ts-ignore
     task = "transcribe",
-    // @ts-ignore
     outputDir = path.dirname(audioPath),
   } = options;
 
@@ -93,7 +99,7 @@ export async function transcribe(audioPath: any, options = {}) {
     const useCuda = checkCudaAvailable();
 
     // Build whisper command arguments
-    const args: any[] = [
+    const args: string[] = [
       audioPath,
       "--model",
       WHISPER_MODEL,
@@ -127,7 +133,6 @@ export async function transcribe(audioPath: any, options = {}) {
     console.log(`[Whisper] Task: ${task}`);
 
     const whisperProcess = spawn("whisper", args, {
-      shell: true,
       stdio: ["pipe", "pipe", "pipe"],
     });
 
@@ -168,10 +173,13 @@ export async function transcribe(audioPath: any, options = {}) {
 
       try {
         const jsonContent = fs.readFileSync(jsonPath, "utf-8");
-        const result = JSON.parse(jsonContent);
+        const result = JSON.parse(jsonContent) as {
+          segments?: { start?: number; end?: number; text?: string }[];
+          language?: string;
+        };
 
         // Parse segments from Whisper output
-        const segments = (result.segments || []).map((seg: any) => ({
+        const segments = (result.segments || []).map((seg) => ({
           start: seg.start || 0,
           end: seg.end || 0,
           speech: (seg.text || "").trim(),
@@ -203,9 +211,9 @@ export async function transcribe(audioPath: any, options = {}) {
           segments,
           detectedLanguage,
         });
-      } catch (parseError: any) {
+      } catch (parseError: unknown) {
         reject(
-          new Error(`Failed to parse Whisper output: ${parseError.message}`)
+          new Error(`Failed to parse Whisper output: ${parseError instanceof Error ? parseError.message : String(parseError)}`)
         );
       }
     });
@@ -230,25 +238,24 @@ export async function transcribe(audioPath: any, options = {}) {
  * @returns {Promise<{segments: Array, detectedLanguage: string}>}
  */
 export async function transcribeWithProgress(
-  audioPath: any,
-  audioDuration: any,
-  onProgress = () => {},
-  options = {}
-) {
+  audioPath: string,
+  audioDuration: number,
+  onProgress: (pct: number) => void = () => {},
+  options: TranscribeOptions = {}
+): Promise<TranscribeResult> {
   // Estimate transcription time based on audio duration and device
   // GPU is ~10x faster than CPU, base model is ~2x faster than small
   const useCuda = checkCudaAvailable();
   const speedFactor = useCuda ? 0.1 : 0.3; // GPU: ~10x realtime, CPU: ~3x realtime
   const estimatedTime = Math.max(audioDuration * speedFactor, 5); // At least 5 seconds
 
-  let progressInterval;
+  let progressInterval: ReturnType<typeof setInterval>;
   let currentProgress = 0;
 
   // Simulate progress updates during transcription
   progressInterval = setInterval(
     () => {
       currentProgress = Math.min(currentProgress + 2, 95);
-      // @ts-ignore
       onProgress(currentProgress);
     },
     (estimatedTime * 1000) / 50
@@ -257,7 +264,6 @@ export async function transcribeWithProgress(
   try {
     const result = await transcribe(audioPath, options);
     clearInterval(progressInterval);
-    // @ts-ignore
     onProgress(100);
     return result;
   } catch (error) {
@@ -272,9 +278,9 @@ export async function transcribeWithProgress(
  * @param {Array} segments - Transcription segments
  * @returns {string} Full transcript text
  */
-export function getFullText(segments: any) {
+export function getFullText(segments: { speech: string }[]): string {
   return segments
-    .map((s: any) => s.speech)
+    .map((s) => s.speech)
     .join(" ")
     .trim();
 }
@@ -286,7 +292,7 @@ export function getFullText(segments: any) {
  */
 export async function checkWhisperCli() {
   return new Promise((resolve) => {
-    const proc = spawn("whisper", ["--help"], { shell: true, stdio: "pipe" });
+    const proc = spawn("whisper", ["--help"], { stdio: "pipe" });
 
     proc.on("close", (code) => {
       resolve(code === 0);

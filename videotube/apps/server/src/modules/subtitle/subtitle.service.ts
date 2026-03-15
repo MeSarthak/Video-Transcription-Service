@@ -229,13 +229,6 @@ class SubtitleService {
       throw new ApiError(400, "Subtitle regeneration already in progress");
     }
 
-    await Video.findByIdAndUpdate(videoId, {
-      "subtitles.status": "pending",
-      "subtitles.language": language,
-      "subtitles.task": task,
-      "subtitles.errorMessage": null,
-    });
-
     throw new ApiError(
       501,
       "Subtitle regeneration requires access to the original video file. " +

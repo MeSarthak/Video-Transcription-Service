@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { VideoCard } from "../components/VideoCard";
+import { SkeletonVideoCard } from "../components/ui/Skeleton";
+import { StaggerList, StaggerItem } from "../components/ui/StaggerList";
 import { fetchVideos, queryKeys } from "../lib/queries";
 
 const SORT_OPTIONS = [
@@ -32,7 +34,7 @@ export function Home() {
           <button
             key={opt.label}
             onClick={() => setSortIdx(i)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-150 active:scale-95 ${
               sortIdx === i
                 ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900"
                 : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -43,20 +45,11 @@ export function Home() {
         ))}
       </div>
 
-      {/* States */}
+      {/* Skeleton loading grid */}
       {isLoading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="animate-pulse">
-              <div className="aspect-video bg-gray-200 dark:bg-gray-700 rounded-xl" />
-              <div className="flex gap-3 mt-3">
-                <div className="w-9 h-9 bg-gray-200 dark:bg-gray-700 rounded-full flex-shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-                  <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
-                </div>
-              </div>
-            </div>
+            <SkeletonVideoCard key={i} />
           ))}
         </div>
       )}
@@ -74,12 +67,15 @@ export function Home() {
         </div>
       )}
 
+      {/* Staggered video grid */}
       {!isLoading && !isError && videos.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {videos.map((video) => (
-            <VideoCard key={video._id} video={video} />
+            <StaggerItem key={video._id}>
+              <VideoCard video={video} />
+            </StaggerItem>
           ))}
-        </div>
+        </StaggerList>
       )}
     </div>
   );

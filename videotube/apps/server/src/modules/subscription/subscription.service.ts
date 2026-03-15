@@ -2,6 +2,7 @@ import mongoose, { type Types } from 'mongoose';
 import { Subscription } from './subscription.model.js';
 import { User } from '../user/user.model.js';
 import { ApiError } from '../../lib/ApiError.js';
+import { notificationService } from '../notification/notification.service.js';
 
 class SubscriptionService {
   async toggleSubscription(channelId: string, userId: Types.ObjectId) {
@@ -26,32 +27,51 @@ class SubscriptionService {
     });
 
     if (deleted) {
-      // decrement counters
-      await User.findByIdAndUpdate(channelObjId, { $inc: { subscribersCount: -1 } });
+      // decrement counters and fetch updated count in one round-trip
+      const updated = await User.findByIdAndUpdate(
+        channelObjId,
+        { $inc: { subscribersCount: -1 } },
+        { new: true, select: 'subscribersCount' },
+      );
       await User.findByIdAndUpdate(userId, { $inc: { subscribedToCount: -1 } });
-      return { subscribed: false };
+      return { subscribed: false, subscribersCount: updated?.subscribersCount ?? 0 };
     }
 
+    let subscribersCount = channel.subscribersCount ?? 0;
     try {
       await Subscription.create({ subscriber: userId, channel: channelObjId });
-      // increment counters
-      await User.findByIdAndUpdate(channelObjId, { $inc: { subscribersCount: 1 } });
+      // increment counters and fetch updated count in one round-trip
+      const updated = await User.findByIdAndUpdate(
+        channelObjId,
+        { $inc: { subscribersCount: 1 } },
+        { new: true, select: 'subscribersCount' },
+      );
       await User.findByIdAndUpdate(userId, { $inc: { subscribedToCount: 1 } });
-    } catch (err: any) {
-      if (err.code === 11000) return { subscribed: true };
+      subscribersCount = updated?.subscribersCount ?? subscribersCount + 1;
+    } catch (err: unknown) {
+      if (err instanceof Error && (err as NodeJS.ErrnoException & { code?: number }).code === 11000) return { subscribed: true, subscribersCount };
       throw err;
     }
 
-    // notification logic can be integrated here later
-    return { subscribed: true };
-  }
+    // Notify channel owner on new subscription (fire-and-forget)
+    void notificationService.createNotification({
+      recipient: channelObjId,
+      sender: userId,
+      type: 'SUBSCRIBE',
+      referenceId: channelObjId,
+      referenceModel: 'User',
+    }).catch(() => {});
 
-  async getUserChannelSubscribers(channelId: string) {
+    return { subscribed: true, subscribersCount };
+  }
+  async getUserChannelSubscribers(channelId: string, page = 1, limit = 10) {
     if (!mongoose.Types.ObjectId.isValid(channelId)) {
       throw new ApiError(400, 'Invalid channel ID format');
     }
 
-    return Subscription.aggregate([
+    const skip = (page - 1) * limit;
+
+    const result = await Subscription.aggregate([
       { $match: { channel: new mongoose.Types.ObjectId(channelId) } },
       {
         $lookup: {
@@ -63,7 +83,24 @@ class SubscriptionService {
         },
       },
       { $addFields: { subscriber: { $first: '$subscriber' } } },
+      {
+        $facet: {
+          metadata: [{ $count: 'total' }],
+          docs: [{ $skip: skip }, { $limit: limit }],
+        },
+      },
     ]);
+
+    const total = result[0]?.metadata[0]?.total ?? 0;
+    return {
+      docs: result[0]?.docs ?? [],
+      totalDocs: total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+    };
   }
 
   async getSubscribedChannels(subscriberId: string) {

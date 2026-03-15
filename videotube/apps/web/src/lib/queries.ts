@@ -125,8 +125,10 @@ export interface LikedVideoEntry {
   createdAt: string;
 }
 
-export async function fetchLikedVideos(): Promise<LikedVideoEntry[]> {
-  const res = await api.get<ApiResponse<LikedVideoEntry[]>>('/likes/videos');
+export async function fetchLikedVideos(page = 1, limit = 20): Promise<PaginatedResponse<LikedVideoEntry>> {
+  const res = await api.get<ApiResponse<PaginatedResponse<LikedVideoEntry>>>('/likes/videos', {
+    params: { page, limit },
+  });
   return res.data.data;
 }
 

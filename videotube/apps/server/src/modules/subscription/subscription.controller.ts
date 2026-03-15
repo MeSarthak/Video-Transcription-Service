@@ -3,6 +3,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { ApiResponse } from '../../lib/ApiResponse.js';
 import { subscriptionService } from './subscription.service.js';
 import type { AuthenticatedRequest } from '../../lib/types.js';
+import { paginationSchema } from '@videotube/shared';
 
 export const toggleSubscription = asyncHandler(async (req: Request, res: Response) => {
   const { channelId } = req.params;
@@ -14,8 +15,9 @@ export const toggleSubscription = asyncHandler(async (req: Request, res: Respons
 
 export const getUserChannelSubscribers = asyncHandler(async (req: Request, res: Response) => {
   const { channelId } = req.params;
+  const { page, limit } = paginationSchema.parse(req.query);
 
-  const subscribers = await subscriptionService.getUserChannelSubscribers(channelId as string);
+  const subscribers = await subscriptionService.getUserChannelSubscribers(channelId as string, page, limit);
   ApiResponse.send(res, 200, subscribers, 'Subscribers fetched successfully');
 });
 

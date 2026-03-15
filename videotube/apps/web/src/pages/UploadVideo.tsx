@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Upload, CheckCircle, XCircle, Loader2, Film, X } from "lucide-react";
+import axios from "axios";
 import api from "../lib/api";
 import { fetchVideoStatus, queryKeys } from "../lib/queries";
 import type { ApiResponse } from "../types";
@@ -104,8 +105,19 @@ export function UploadVideo() {
   const [selectedFrame, setSelectedFrame] = useState<string | null>(null);
   // Holds a File derived from a picked frame (injected into the form submission)
   const frameFileRef = useRef<File | null>(null);
+  // Tracks the current blob ObjectURL so we can revoke it on unmount/clear
+  const thumbnailObjectUrlRef = useRef<string | null>(null);
   // Whether the user has chosen a real image file (vs a frame)
   const [hasImageFile, setHasImageFile] = useState(false);
+
+  // Revoke any outstanding objectURL when the component unmounts
+  useEffect(() => {
+    return () => {
+      if (thumbnailObjectUrlRef.current) {
+        URL.revokeObjectURL(thumbnailObjectUrlRef.current);
+      }
+    };
+  }, []);
 
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -185,7 +197,13 @@ export function UploadVideo() {
         setSelectedFrame(null);
         setVideoFrames([]);
         frameFileRef.current = null;
-        if (!hasImageFile) setThumbnailPreview(null);
+        if (!hasImageFile) {
+          if (thumbnailObjectUrlRef.current) {
+            URL.revokeObjectURL(thumbnailObjectUrlRef.current);
+            thumbnailObjectUrlRef.current = null;
+          }
+          setThumbnailPreview(null);
+        }
 
         setExtractingFrames(true);
         try {
@@ -211,6 +229,10 @@ export function UploadVideo() {
 
   /** User clears the current thumbnail selection (reverts to auto) */
   const clearThumbnail = () => {
+    if (thumbnailObjectUrlRef.current) {
+      URL.revokeObjectURL(thumbnailObjectUrlRef.current);
+      thumbnailObjectUrlRef.current = null;
+    }
     setThumbnailPreview(null);
     setSelectedFrame(null);
     setHasImageFile(false);
@@ -278,7 +300,9 @@ export function UploadVideo() {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {mutation.isError && (
           <div className="p-3 rounded-md bg-red-50 text-red-700 text-sm dark:bg-red-900/30 dark:text-red-400">
-            {(mutation.error as any)?.response?.data?.message ?? "Upload failed. Please try again."}
+            {axios.isAxiosError(mutation.error)
+              ? (mutation.error.response?.data as { message?: string })?.message ?? "Upload failed. Please try again."
+              : "Upload failed. Please try again."}
           </div>
         )}
 
@@ -390,7 +414,13 @@ export function UploadVideo() {
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     if (f) {
-                      setThumbnailPreview(URL.createObjectURL(f));
+                      // Revoke previous objectURL to avoid memory leak
+                      if (thumbnailObjectUrlRef.current) {
+                        URL.revokeObjectURL(thumbnailObjectUrlRef.current);
+                      }
+                      const url = URL.createObjectURL(f);
+                      thumbnailObjectUrlRef.current = url;
+                      setThumbnailPreview(url);
                       setSelectedFrame(null);
                       setHasImageFile(true);
                       frameFileRef.current = null;

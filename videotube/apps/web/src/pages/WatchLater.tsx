@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Clock, Trash2, Plus, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   fetchUserPlaylists,
   fetchPlaylistById,
@@ -10,6 +11,7 @@ import {
   queryKeys,
 } from "../lib/queries";
 import { useAuth } from "../context/AuthContext";
+import { SkeletonRelatedRow } from "../components/ui/Skeleton";
 import type { Video } from "../types";
 
 const WATCH_LATER_NAME = "Watch Later";
@@ -107,13 +109,7 @@ export function WatchLater() {
         </div>
         <div className="space-y-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="flex gap-3 animate-pulse">
-              <div className="w-40 aspect-video bg-gray-200 dark:bg-gray-700 rounded-lg flex-shrink-0" />
-              <div className="flex-1 space-y-2 py-1">
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/3" />
-              </div>
-            </div>
+            <SkeletonRelatedRow key={i} />
           ))}
         </div>
       </div>
@@ -186,74 +182,80 @@ export function WatchLater() {
       </div>
 
       <div className="space-y-3">
-        {videos.map((video) => (
-          <div
-            key={video._id}
-            className="flex gap-3 group p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          >
-            {/* Thumbnail */}
-            <Link
-              to={`/watch/${video._id}`}
-              className="relative w-40 aspect-video bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden flex-shrink-0 block"
+        <AnimatePresence initial={false}>
+          {videos.map((video, i) => (
+            <motion.div
+              key={video._id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, x: 40 }}
+              transition={{ duration: 0.2, ease: "easeOut", delay: Math.min(i * 0.03, 0.3) }}
+              className="flex gap-3 group p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
-              {video.thumbnail ? (
-                <img
-                  src={video.thumbnail}
-                  alt={video.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
-                  No thumbnail
-                </div>
-              )}
-              {video.duration && (
-                <span className="absolute bottom-1 right-1 bg-black/80 text-white text-xs px-1 py-0.5 rounded">
-                  {formatDuration(video.duration)}
-                </span>
-              )}
-            </Link>
-
-            {/* Meta */}
-            <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <Link to={`/watch/${video._id}`}>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 hover:underline">
-                    {video.title}
-                  </h3>
-                </Link>
-                {video.owner && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {typeof video.owner === "object" ? video.owner.fullname : ""}
-                  </p>
-                )}
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {video.views?.toLocaleString()} views
-                </p>
-              </div>
-
-              {/* Remove button */}
-              <button
-                onClick={() =>
-                  removeMutation.mutate({
-                    videoId: video._id,
-                    playlistId: watchLaterSummary._id,
-                  })
-                }
-                disabled={removingId === video._id}
-                className="flex-shrink-0 p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40"
-                title="Remove from Watch Later"
+              {/* Thumbnail */}
+              <Link
+                to={`/watch/${video._id}`}
+                className="relative w-40 aspect-video bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden flex-shrink-0 block"
               >
-                {removingId === video._id ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                {video.thumbnail ? (
+                  <img
+                    src={video.thumbnail}
+                    alt={video.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                    loading="lazy"
+                  />
                 ) : (
-                  <Trash2 className="w-4 h-4" />
+                  <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                    No thumbnail
+                  </div>
                 )}
-              </button>
-            </div>
-          </div>
-        ))}
+                {video.duration && (
+                  <span className="absolute bottom-1 right-1 bg-black/80 text-white text-xs px-1 py-0.5 rounded">
+                    {formatDuration(video.duration)}
+                  </span>
+                )}
+              </Link>
+
+              {/* Meta */}
+              <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <Link to={`/watch/${video._id}`}>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 hover:underline">
+                      {video.title}
+                    </h3>
+                  </Link>
+                  {video.owner && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {typeof video.owner === "object" ? video.owner.fullname : ""}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {video.views?.toLocaleString()} views
+                  </p>
+                </div>
+
+                {/* Remove button */}
+                <button
+                  onClick={() =>
+                    removeMutation.mutate({
+                      videoId: video._id,
+                      playlistId: watchLaterSummary._id,
+                    })
+                  }
+                  disabled={removingId === video._id}
+                  className="flex-shrink-0 p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 active:scale-90 transition-transform duration-100"
+                  title="Remove from Watch Later"
+                >
+                  {removingId === video._id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Menu, Search, Upload, Bell, UserCircle, LogOut, X } from "lucide-react";
 import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
 
 export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
@@ -39,7 +40,7 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
     <nav className="fixed top-0 z-50 w-full bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
       <div className="h-16 flex items-center justify-between px-3 lg:px-5">
         <div className="flex items-center gap-4">
-          <button onClick={onMenuClick} className="p-2 hover:bg-gray-100 rounded-full dark:hover:bg-gray-700">
+          <button onClick={onMenuClick} className="p-2 hover:bg-gray-100 rounded-full dark:hover:bg-gray-700 transition-colors duration-150 active:scale-90 transition-transform">
             <Menu className="w-6 h-6 text-gray-600 dark:text-gray-300" />
           </button>
           <Link to="/" className="flex items-center gap-2">
@@ -61,11 +62,11 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search"
-              className="w-full px-4 py-2 border border-gray-300 rounded-l-full focus:outline-none focus:border-indigo-500 dark:bg-gray-900 dark:border-gray-700 dark:text-white"
+              className="w-full px-4 py-2 border border-gray-300 rounded-l-full focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-800 dark:bg-gray-900 dark:border-gray-700 dark:text-white transition-all duration-200"
             />
             <button
               type="submit"
-              className="px-5 py-2 bg-gray-100 border border-l-0 border-gray-300 rounded-r-full hover:bg-gray-200 dark:bg-gray-700 dark:border-gray-700"
+              className="px-5 py-2 bg-gray-100 border border-l-0 border-gray-300 rounded-r-full hover:bg-gray-200 dark:bg-gray-700 dark:border-gray-700 active:scale-95 transition-transform duration-100"
             >
               <Search className="w-5 h-5 text-gray-600 dark:text-gray-300" />
             </button>
@@ -76,7 +77,7 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
           {/* Mobile search toggle */}
           <button
             onClick={openMobileSearch}
-            className="p-2 sm:hidden hover:bg-gray-100 rounded-full dark:hover:bg-gray-700"
+            className="p-2 sm:hidden hover:bg-gray-100 rounded-full dark:hover:bg-gray-700 transition-colors duration-150 active:scale-90 transition-transform"
             aria-label="Search"
           >
             <Search className="w-6 h-6 text-gray-600 dark:text-gray-300" />
@@ -86,7 +87,7 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
           {isAuthenticated && (
             <Link
               to="/upload"
-              className="p-2 hover:bg-gray-100 rounded-full dark:hover:bg-gray-700"
+              className="p-2 hover:bg-gray-100 rounded-full dark:hover:bg-gray-700 transition-colors duration-150 active:scale-90 transition-transform"
               title="Upload video"
             >
               <Upload className="w-5 h-5 text-gray-600 dark:text-gray-300" />
@@ -94,14 +95,14 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
           )}
 
           {/* Notifications */}
-          <button className="p-2 hover:bg-gray-100 rounded-full dark:hover:bg-gray-700">
+          <button className="p-2 hover:bg-gray-100 rounded-full dark:hover:bg-gray-700 transition-colors duration-150 active:scale-90 transition-transform">
             <Bell className="w-6 h-6 text-gray-600 dark:text-gray-300" />
           </button>
 
           {isAuthenticated && user ? (
             <div className="flex items-center gap-2 ml-1">
               <Link to={`/channel/${user.username}`}>
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold overflow-hidden">
+                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold overflow-hidden transition-all duration-150 hover:ring-2 hover:ring-indigo-400">
                   {user.avatar ? (
                     <img src={user.avatar} alt={user.fullname} className="w-full h-full object-cover" />
                   ) : (
@@ -111,7 +112,7 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
               </Link>
               <button
                 onClick={() => logout()}
-                className="p-2 hover:bg-gray-100 rounded-full dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+                className="p-2 hover:bg-gray-100 rounded-full dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors duration-150 active:scale-90 transition-transform"
                 title="Logout"
               >
                 <LogOut className="w-5 h-5" />
@@ -120,7 +121,7 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
           ) : (
             <Link
               to="/login"
-              className="flex items-center gap-2 ml-1 px-3 py-1.5 border border-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 dark:border-gray-600"
+              className="flex items-center gap-2 ml-1 px-3 py-1.5 border border-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 dark:border-gray-600 transition-colors duration-150 active:scale-95 transition-transform"
             >
               <UserCircle className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
               <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">Sign in</span>
@@ -131,36 +132,45 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
 
     </nav>
 
-    {/* Mobile search overlay — fixed below navbar, doesn't push content */}
-    {mobileSearchOpen && (
-      <div className="sm:hidden fixed top-16 left-0 right-0 z-40 px-3 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-md">
-        <form onSubmit={handleSearch} className="flex items-center gap-2">
-          <input
-            autoFocus
-            type="text"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search videos…"
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-full text-sm focus:outline-none focus:border-indigo-500 dark:bg-gray-900 dark:border-gray-700 dark:text-white"
-          />
-          <button
-            type="submit"
-            className="p-2 bg-gray-100 border border-gray-300 rounded-full hover:bg-gray-200 dark:bg-gray-700 dark:border-gray-600"
-            aria-label="Submit search"
-          >
-            <Search className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-          </button>
-          <button
-            type="button"
-            onClick={closeMobileSearch}
-            className="p-2 hover:bg-gray-100 rounded-full dark:hover:bg-gray-700"
-            aria-label="Close search"
-          >
-            <X className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-          </button>
-        </form>
-      </div>
+    {/* Mobile search overlay — animated slide down */}
+    <AnimatePresence>
+      {mobileSearchOpen && (
+        <motion.div
+          key="mobile-search"
+          className="sm:hidden fixed top-16 left-0 right-0 z-40 px-3 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-md"
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.15, ease: "easeOut" }}
+        >
+          <form onSubmit={handleSearch} className="flex items-center gap-2">
+            <input
+              autoFocus
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search videos…"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-full text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-800 dark:bg-gray-900 dark:border-gray-700 dark:text-white transition-all duration-200"
+            />
+            <button
+              type="submit"
+              className="p-2 bg-gray-100 border border-gray-300 rounded-full hover:bg-gray-200 dark:bg-gray-700 dark:border-gray-600 active:scale-90 transition-transform duration-100"
+              aria-label="Submit search"
+            >
+              <Search className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+            </button>
+            <button
+              type="button"
+              onClick={closeMobileSearch}
+              className="p-2 hover:bg-gray-100 rounded-full dark:hover:bg-gray-700 transition-colors duration-150 active:scale-90 transition-transform"
+              aria-label="Close search"
+            >
+              <X className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+            </button>
+          </form>
+        </motion.div>
       )}
+    </AnimatePresence>
     </>
   );
 }

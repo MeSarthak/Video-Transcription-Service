@@ -4,6 +4,7 @@ import { ApiResponse } from '../../lib/ApiResponse.js';
 import { videoService } from './video.service.js';
 import type { AuthenticatedRequest, OptionalAuthRequest } from '../../lib/types.js';
 import { ApiError } from '../../lib/ApiError.js';
+import type { GetAllVideosQuery } from '@videotube/shared';
 
 export const uploadHLSVideo = asyncHandler(async (req: Request, res: Response) => {
   const { user } = req as AuthenticatedRequest;
@@ -37,7 +38,7 @@ export const getVideoStatus = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const getAllVideos = asyncHandler(async (req: Request, res: Response) => {
-  const result = await videoService.getAllVideos(req.query as any);
+  const result = await videoService.getAllVideos(req.query as unknown as GetAllVideosQuery);
   ApiResponse.send(res, 200, result, 'Videos fetched successfully');
 });
 

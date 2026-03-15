@@ -2,6 +2,7 @@ import mongoose, { type Types } from 'mongoose';
 import { Comment } from './comment.model.js';
 import { Video } from '../video/video.model.js';
 import { ApiError } from '../../lib/ApiError.js';
+import { notificationService } from '../notification/notification.service.js';
 
 class CommentService {
   async getVideoComments(
@@ -95,7 +96,14 @@ class CommentService {
     // We will update the Video's comment count denormalized field
     await Video.findByIdAndUpdate(videoId, { $inc: { commentsCount: 1 } });
 
-    // Note: notification creation is decoupled and can be added later or fired here
+    // Notify video owner (fire-and-forget — never fails the comment action)
+    void notificationService.createNotification({
+      recipient: video.owner,
+      sender: userId,
+      type: 'COMMENT',
+      referenceId: comment._id,
+      referenceModel: 'Comment',
+    }).catch(() => {});
 
     return comment;
   }

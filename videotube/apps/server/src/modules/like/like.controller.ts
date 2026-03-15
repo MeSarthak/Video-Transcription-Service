@@ -3,6 +3,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { ApiResponse } from '../../lib/ApiResponse.js';
 import { likeService } from './like.service.js';
 import type { AuthenticatedRequest } from '../../lib/types.js';
+import { paginationSchema } from '@videotube/shared';
 
 export const toggleVideoLike = asyncHandler(async (req: Request, res: Response) => {
   const { videoId } = req.params;
@@ -30,7 +31,8 @@ export const toggleTweetLike = asyncHandler(async (req: Request, res: Response) 
 
 export const getLikedVideos = asyncHandler(async (req: Request, res: Response) => {
   const { user } = req as AuthenticatedRequest;
+  const { page, limit } = paginationSchema.parse(req.query);
 
-  const videos = await likeService.getLikedVideos(user._id);
+  const videos = await likeService.getLikedVideos(user._id, page, limit);
   ApiResponse.send(res, 200, videos, 'Liked videos fetched successfully');
 });

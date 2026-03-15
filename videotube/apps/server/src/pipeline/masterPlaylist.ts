@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import * as path from "node:path";
+import { TEMP_DIR } from "./paths.js";
 
 export const generateMasterPlaylist = async (videoId: string, variants: string[]) => {
   // Validate videoId against whitelist (alphanumeric, underscore, hyphen only)
@@ -37,7 +38,7 @@ export const generateMasterPlaylist = async (videoId: string, variants: string[]
     master += `${v}/index.m3u8\n`;
   });
 
-  const masterPath = path.join("public", "temp", videoId, "master.m3u8");
+  const masterPath = path.join(TEMP_DIR, videoId, "master.m3u8");
 
   // Ensure containing directory exists before writing
   const masterDir = path.dirname(masterPath);

@@ -14,6 +14,7 @@ import { env } from './config/env.js';
 import { connectDB, disconnectDB } from './config/db.js';
 import { disconnectRedis } from './config/redis.js';
 import { configureCloudinary } from './config/cloudinary.js';
+import { ensureContainerExists } from './config/azure.js';
 import { logger } from './lib/logger.js';
 import './workers/video.worker.js';
 import type { Server } from 'node:http';
@@ -37,6 +38,7 @@ async function bootstrap(): Promise<void> {
   await connectDB();
   configureCloudinary();
   await ensureTempDir();
+  await ensureContainerExists();
 
   server = app.listen(env.PORT, () => {
     logger.info({ port: env.PORT, env: env.NODE_ENV }, 'Server started');

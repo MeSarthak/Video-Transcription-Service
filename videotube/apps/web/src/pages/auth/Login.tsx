@@ -1,31 +1,25 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import { Video } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import api from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { useState } from "react";
-
-const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
-
-type LoginForm = z.infer<typeof loginSchema>;
+import { loginSchema } from "@videotube/shared";
+import type { LoginInput } from "@videotube/shared";
 
 export function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [errorMsg, setErrorMsg] = useState("");
 
-  const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
+  const { register, handleSubmit, formState: { errors } } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
   });
 
   const mutation = useMutation({
-    mutationFn: async (data: LoginForm) => {
+    mutationFn: async (data: LoginInput) => {
       const response = await api.post('/auth/login', data);
       return response.data.data;
     },
@@ -33,12 +27,15 @@ export function Login() {
       login(data.user);
       navigate("/");
     },
-    onError: (error: any) => {
-      setErrorMsg(error.response?.data?.message || "Failed to login. Please try again.");
+    onError: (error: unknown) => {
+      const msg = error instanceof Error
+        ? (error as { response?: { data?: { message?: string } } }).response?.data?.message ?? error.message
+        : "Failed to login. Please try again.";
+      setErrorMsg(msg);
     }
   });
 
-  const onSubmit = (data: LoginForm) => {
+  const onSubmit = (data: LoginInput) => {
     setErrorMsg("");
     mutation.mutate(data);
   };

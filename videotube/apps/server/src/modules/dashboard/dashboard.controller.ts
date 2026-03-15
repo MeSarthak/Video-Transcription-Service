@@ -3,6 +3,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { ApiResponse } from '../../lib/ApiResponse.js';
 import { dashboardService } from './dashboard.service.js';
 import type { AuthenticatedRequest } from '../../lib/types.js';
+import { paginationSchema } from '@videotube/shared';
 
 export const getChannelStats = asyncHandler(async (req: Request, res: Response) => {
   const { user } = req as AuthenticatedRequest;
@@ -13,7 +14,8 @@ export const getChannelStats = asyncHandler(async (req: Request, res: Response) 
 
 export const getChannelVideos = asyncHandler(async (req: Request, res: Response) => {
   const { user } = req as AuthenticatedRequest;
+  const { page, limit } = paginationSchema.parse(req.query);
 
-  const videos = await dashboardService.getChannelVideos(user._id);
+  const videos = await dashboardService.getChannelVideos(user._id, page, limit);
   ApiResponse.send(res, 200, videos, 'Channel videos fetched successfully');
 });

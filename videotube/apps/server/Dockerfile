@@ -31,11 +31,16 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        ffmpeg \
        python3 \
-       python3-pip \
        python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --no-cache-dir --break-system-packages openai-whisper
+# Create an isolated venv so pip never touches system packages
+RUN python3 -m venv /opt/whisper-env \
+    && /opt/whisper-env/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/whisper-env/bin/pip install --no-cache-dir openai-whisper
+
+# Make whisper available on PATH
+ENV PATH="/opt/whisper-env/bin:${PATH}"
 
 # Copy workspace root + lockfile
 COPY package*.json ./

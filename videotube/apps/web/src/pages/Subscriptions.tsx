@@ -3,6 +3,8 @@ import { PlaySquare } from "lucide-react";
 import { Link } from "react-router-dom";
 import { fetchSubscribedChannels, fetchChannelVideos, queryKeys } from "../lib/queries";
 import { VideoCard } from "../components/VideoCard";
+import { SkeletonAvatar, SkeletonVideoCard, SkeletonText } from "../components/ui/Skeleton";
+import { StaggerList, StaggerItem } from "../components/ui/StaggerList";
 import { useAuth } from "../context/AuthContext";
 import type { Video } from "../types";
 
@@ -46,18 +48,17 @@ function ChannelSection({ channelId, channelUsername, channelFullname, channelAv
       {isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="animate-pulse">
-              <div className="aspect-video bg-gray-200 dark:bg-gray-700 rounded-lg" />
-              <div className="mt-2 h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-            </div>
+            <SkeletonVideoCard key={i} />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <StaggerList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {videos.map((video) => (
-            <VideoCard key={video._id} video={video} />
+            <StaggerItem key={video._id}>
+              <VideoCard video={video} />
+            </StaggerItem>
           ))}
-        </div>
+        </StaggerList>
       )}
     </div>
   );
@@ -103,17 +104,14 @@ export function Subscriptions() {
       {isLoading && (
         <div className="space-y-8">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="animate-pulse">
+            <div key={i}>
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700" />
-                <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded" />
+                <SkeletonAvatar size="w-9 h-9" />
+                <SkeletonText width="w-32" height="h-4" />
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {Array.from({ length: 4 }).map((_, j) => (
-                  <div key={j}>
-                    <div className="aspect-video bg-gray-200 dark:bg-gray-700 rounded-lg" />
-                    <div className="mt-2 h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-                  </div>
+                  <SkeletonVideoCard key={j} />
                 ))}
               </div>
             </div>

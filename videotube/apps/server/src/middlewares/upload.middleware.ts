@@ -4,12 +4,13 @@ import { unlink } from 'node:fs/promises';
 import { fileTypeFromBuffer } from 'file-type';
 import { ALLOWED_MIMES, UPLOAD_LIMITS } from '@videotube/shared';
 import type { Request, Response, NextFunction } from 'express';
+import { TEMP_DIR } from '../pipeline/paths.js';
 
 // ── Disk storage for video uploads (needs local path for FFmpeg) ──
 
 const storage = multer.diskStorage({
   destination(_req, _file, cb) {
-    cb(null, './public/temp/');
+    cb(null, TEMP_DIR);
   },
   filename(_req, file, cb) {
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
@@ -131,8 +132,8 @@ export async function validateFileSignature(
     }
 
     next();
-  } catch (err: any) {
-    console.error('[validateFileSignature] ERROR:', err.message);
+  } catch (err: unknown) {
+    console.error('[validateFileSignature] ERROR:', err instanceof Error ? err.message : String(err));
     res.status(400).json({
       statusCode: 400,
       data: null,

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { TEMP_DIR } from "./paths.js";
 
 // Validate videoId to prevent path traversal
 const validateVideoId = (videoId: any) => {
@@ -26,7 +27,7 @@ export const generateThumbnail = async (inputPath: string, videoId: string) => {
 
   // Resolve to absolute path and verify it's inside allowed directory
   const resolvedPath = path.resolve(inputPath);
-  const allowedRoot = path.resolve("public/temp");
+  const allowedRoot = TEMP_DIR;
 
   // Check if resolved path is inside allowed directory
   if (
@@ -36,7 +37,7 @@ export const generateThumbnail = async (inputPath: string, videoId: string) => {
     throw new Error("Invalid inputPath: path outside allowed directory");
   }
 
-  const outDir = path.join("public", "temp", videoId);
+  const outDir = path.join(TEMP_DIR, videoId);
   fs.mkdirSync(outDir, { recursive: true });
   const thumbPath = path.join(outDir, "thumb.jpg");
 

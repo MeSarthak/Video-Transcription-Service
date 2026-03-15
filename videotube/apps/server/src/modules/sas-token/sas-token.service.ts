@@ -109,7 +109,7 @@ class SASTokenService {
         expiresIn: expiresInSeconds,
         permissions: "r",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof ApiError) throw error;
       throw new ApiError(
         500,
@@ -163,7 +163,7 @@ class SASTokenService {
         expiresIn: expiresInSeconds,
         permissions: "cw",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof ApiError) throw error;
       throw new ApiError(
         500,
@@ -213,7 +213,7 @@ class SASTokenService {
         permissions: "r",
         contentType: "application/x-mpegURL",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof ApiError) throw error;
       throw new ApiError(
         500,
@@ -245,7 +245,7 @@ class SASTokenService {
         timeRemaining,
         shouldRefresh: timeRemaining < 5 * 60,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof ApiError) throw error;
       throw new ApiError(400, "Invalid SAS URL format");
     }
@@ -308,7 +308,7 @@ class SASTokenService {
         expiresIn: finalExpiry,
         permissions,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof ApiError) throw error;
       throw new ApiError(500, "Failed to generate SAS URL");
     }

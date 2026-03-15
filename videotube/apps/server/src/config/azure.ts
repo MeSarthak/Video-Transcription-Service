@@ -150,4 +150,27 @@ export async function uploadSingleFile(
   return blobName;
 }
 
+/**
+ * Delete all blobs under a given prefix (e.g. all files for a videoId).
+ * Returns the list of deleted blob names.
+ */
+export async function deleteBlobsByPrefix(prefix: string): Promise<string[]> {
+  const container = getContainerClient();
+  const deleted: string[] = [];
+  for await (const blob of container.listBlobsFlat({ prefix })) {
+    await container.deleteBlob(blob.name);
+    deleted.push(blob.name);
+  }
+  return deleted;
+}
+
+/**
+ * Ensure the container exists. Call once at application startup.
+ */
+export async function ensureContainerExists(): Promise<void> {
+  const container = getContainerClient();
+  await container.createIfNotExists();
+  logger.info({ container: env.CONTAINER_NAME }, 'Azure container ready');
+}
+
 export { getBlobServiceClient, getContainerClient };

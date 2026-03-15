@@ -3,6 +3,8 @@ import { ThumbsUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { fetchLikedVideos, queryKeys } from "../lib/queries";
 import { VideoCard } from "../components/VideoCard";
+import { SkeletonVideoCard } from "../components/ui/Skeleton";
+import { StaggerList, StaggerItem } from "../components/ui/StaggerList";
 import { useAuth } from "../context/AuthContext";
 
 export function LikedVideos() {
@@ -31,7 +33,7 @@ export function LikedVideos() {
     );
   }
 
-  const entries = data ?? [];
+  const entries = data?.docs ?? [];
   // The backend returns { _id, video, createdAt } — extract the video objects
   const videos = entries.map((e) => e.video).filter(Boolean);
 
@@ -41,23 +43,14 @@ export function LikedVideos() {
         <ThumbsUp className="w-7 h-7 text-indigo-500" />
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Liked Videos</h1>
         {videos.length > 0 && (
-          <span className="text-sm text-gray-500 dark:text-gray-400">{videos.length} videos</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">{data?.totalDocs ?? videos.length} videos</span>
         )}
       </div>
 
       {isLoading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="animate-pulse">
-              <div className="aspect-video bg-gray-200 dark:bg-gray-700 rounded-xl" />
-              <div className="flex gap-3 mt-3">
-                <div className="w-9 h-9 bg-gray-200 dark:bg-gray-700 rounded-full flex-shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-                  <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
-                </div>
-              </div>
-            </div>
+            <SkeletonVideoCard key={i} />
           ))}
         </div>
       )}
@@ -76,11 +69,13 @@ export function LikedVideos() {
       )}
 
       {!isLoading && !isError && videos.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {videos.map((video) => (
-            <VideoCard key={video._id} video={video} />
+            <StaggerItem key={video._id}>
+              <VideoCard video={video} />
+            </StaggerItem>
           ))}
-        </div>
+        </StaggerList>
       )}
     </div>
   );

@@ -34,12 +34,35 @@ class DashboardService {
     };
   }
 
-  async getChannelVideos(userId: Types.ObjectId) {
+  async getChannelVideos(userId: Types.ObjectId, page = 1, limit = 10) {
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       throw new ApiError(400, 'Invalid User ID');
     }
 
-    return Video.find({ owner: userId }).sort({ createdAt: -1 }).lean();
+    const skip = (page - 1) * limit;
+    const channelId = new mongoose.Types.ObjectId(String(userId));
+
+    const result = await Video.aggregate([
+      { $match: { owner: channelId } },
+      { $sort: { createdAt: -1 } },
+      {
+        $facet: {
+          metadata: [{ $count: 'total' }],
+          docs: [{ $skip: skip }, { $limit: limit }],
+        },
+      },
+    ]);
+
+    const total = result[0]?.metadata[0]?.total ?? 0;
+    return {
+      docs: result[0]?.docs ?? [],
+      totalDocs: total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+    };
   }
 }
 

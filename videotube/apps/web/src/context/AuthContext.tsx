@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
@@ -16,9 +16,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const [user, setUser] = useState<User | null>(null);
 
-  const { data, isLoading, isError } = useQuery({
+  const { data: user = null, isLoading } = useQuery({
     queryKey: ['currentUser'],
     queryFn: async () => {
       const response = await api.get<ApiResponse<User>>('/auth/me');
@@ -27,16 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     retry: false, // Don't retry if not logged in
   });
 
-  useEffect(() => {
-    if (data && !isError) {
-      setUser(data);
-    } else {
-      setUser(null);
-    }
-  }, [data, isError]);
-
   const login = (newUser: User) => {
-    setUser(newUser);
     queryClient.setQueryData(['currentUser'], newUser);
   };
 
@@ -46,7 +36,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Logout failed', error);
     } finally {
-      setUser(null);
       queryClient.setQueryData(['currentUser'], null);
       queryClient.clear(); // Clear all cached data
     }
