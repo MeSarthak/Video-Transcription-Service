@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ThumbsUp, Bell, BellOff, Send, Trash2 } from "lucide-react";
 import {
@@ -8,6 +8,7 @@ import {
   fetchComments,
   postComment,
   deleteComment,
+  deleteVideo,
   toggleVideoLike,
   toggleCommentLike,
   toggleSubscription,
@@ -16,7 +17,6 @@ import {
   fetchVideoSASUrl,
   queryKeys,
 } from "../lib/queries";
-import { VideoCard } from "../components/VideoCard";
 import { useAuth } from "../context/AuthContext";
 import type { Comment } from "../types";
 
@@ -42,10 +42,12 @@ function timeAgo(dateStr: string): string {
 export function Watch() {
   const { videoId } = useParams<{ videoId: string }>();
   const { user, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const viewTracked = useRef(false);
   const [commentText, setCommentText] = useState("");
   const [descExpanded, setDescExpanded] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const {
     data: video,
@@ -143,6 +145,15 @@ export function Watch() {
     },
   });
 
+  // ── Delete video ──────────────────────────────
+  const deleteVideoMutation = useMutation({
+    mutationFn: () => deleteVideo(videoId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["videos"] });
+      navigate("/");
+    },
+  });
+
   // ── Comment like toggle ───────────────────────
   const commentLikeMutation = useMutation({
     mutationFn: (commentId: string) => toggleCommentLike(commentId),
@@ -183,11 +194,48 @@ export function Watch() {
                 </div>
               </div>
             ))}
-          </div>
         </div>
       </div>
-    );
-  }
+
+      {/* ── Delete confirm dialog ─────────────────── */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Delete video?</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+              This will permanently delete the video and all its data. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleteVideoMutation.isPending}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteVideoMutation.mutate()}
+                disabled={deleteVideoMutation.isPending}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {deleteVideoMutation.isPending ? (
+                  <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Deleting…</>
+                ) : (
+                  <><Trash2 className="w-4 h-4" /> Delete</>
+                )}
+              </button>
+            </div>
+            {deleteVideoMutation.isError && (
+              <p className="mt-3 text-xs text-red-500">
+                {(deleteVideoMutation.error as any)?.response?.data?.message ?? "Delete failed. Please try again."}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
   if (isError || !video) {
     return (
@@ -280,19 +328,33 @@ export function Watch() {
             </div>
 
             {/* Like */}
-            <button
-              onClick={() => isAuthenticated && likeMutation.mutate()}
-              disabled={!isAuthenticated || likeMutation.isPending}
-              title={isAuthenticated ? undefined : "Sign in to like"}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                video.isLiked
-                  ? "bg-indigo-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-              } disabled:opacity-50`}
-            >
-              <ThumbsUp className="w-4 h-4" />
-              {video.likesCount ?? 0}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => isAuthenticated && likeMutation.mutate()}
+                disabled={!isAuthenticated || likeMutation.isPending}
+                title={isAuthenticated ? undefined : "Sign in to like"}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  video.isLiked
+                    ? "bg-indigo-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                } disabled:opacity-50`}
+              >
+                <ThumbsUp className="w-4 h-4" />
+                {video.likesCount ?? 0}
+              </button>
+
+              {/* Delete — only for owner */}
+              {isAuthenticated && user?._id === video.owner._id && (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  title="Delete video"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Description */}
@@ -590,7 +652,7 @@ function HLSPlayer({ src }: { src: string }) {
         });
 
         // Keep currentQuality display in sync when auto-switching happens
-        hls.on(Hls.Events.LEVEL_SWITCHED, (_event: any, data: any) => {
+        hls.on(Hls.Events.LEVEL_SWITCHED, (_event: any, _data: any) => {
           if (cancelled) return;
           // Only update the display label if we're in auto mode
           if (hls.autoLevelEnabled) {

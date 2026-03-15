@@ -2,6 +2,7 @@ import mongoose, { type Types } from 'mongoose';
 import { Video } from './video.model.js';
 import { ApiError } from '../../lib/ApiError.js';
 import { addVideoToQueue } from '../../queues/video.queue.js';
+import { deleteBlobsByPrefix } from '../../pipeline/upload.js';
 import { unlink } from 'node:fs/promises';
 import { logger } from '../../lib/logger.js';
 
@@ -12,6 +13,7 @@ interface UploadHLSVideoParams {
   ownerId: Types.ObjectId;
   subtitleLanguage: string;
   subtitleTask: 'transcribe' | 'translate';
+  thumbnailPath?: string;
 }
 
 class VideoService {
@@ -24,6 +26,7 @@ class VideoService {
     ownerId,
     subtitleLanguage,
     subtitleTask,
+    thumbnailPath,
   }: UploadHLSVideoParams) {
     if (!file) {
       throw new ApiError(400, 'Video file is required');
@@ -54,6 +57,7 @@ class VideoService {
           description,
           subtitleLanguage,
           subtitleTask,
+          thumbnailPath,
         });
         logger.info(`Video ${video._id} added to processing queue`);
       } catch (queueErr) {
@@ -403,6 +407,35 @@ class VideoService {
     }
 
     return video;
+  }
+
+  // ── Delete ───────────────────────────────────
+
+  async deleteVideo(videoId: string, requesterId: Types.ObjectId) {
+    if (!mongoose.Types.ObjectId.isValid(videoId)) {
+      throw new ApiError(400, 'Invalid Video ID');
+    }
+
+    const video = await Video.findById(videoId);
+    if (!video) {
+      throw new ApiError(404, 'Video not found');
+    }
+
+    if (video.owner.toString() !== requesterId.toString()) {
+      throw new ApiError(403, 'You are not allowed to delete this video');
+    }
+
+    // Delete all blobs from Azure (segments, master playlist, thumbnail, subtitles)
+    try {
+      await deleteBlobsByPrefix(`${videoId}/`);
+      logger.info(`Deleted Azure blobs for video ${videoId}`);
+    } catch (err) {
+      logger.error({ err }, `Failed to delete Azure blobs for video ${videoId}`);
+      // Non-fatal — still remove DB record so the video is gone from the app
+    }
+
+    await Video.findByIdAndDelete(videoId);
+    logger.info(`Video ${videoId} deleted from DB`);
   }
 }
 

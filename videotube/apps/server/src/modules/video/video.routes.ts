@@ -12,6 +12,7 @@ import {
   getVideoById,
   getRelatedVideos,
   incrementViewCount,
+  deleteVideo,
 } from './video.controller.js';
 import { videoSubtitleRouter } from '../subtitle/subtitle.routes.js';
 
@@ -44,5 +45,6 @@ router.get('/:videoId/related', getRelatedVideos);
 
 // ── Actions ─────────────────────────────────
 router.patch('/:videoId/views', viewsLimiter, incrementViewCount);
+router.delete('/:videoId', verifyJWT, deleteVideo);
 
 export { router as videoRouter };

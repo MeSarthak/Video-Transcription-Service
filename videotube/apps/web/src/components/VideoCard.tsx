@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import type { Video } from "../../types";
+import type { Video } from "../types";
 
 function formatDuration(seconds?: number): string {
   if (!seconds) return "";

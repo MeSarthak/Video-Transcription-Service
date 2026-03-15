@@ -56,6 +56,7 @@ const worker = new Worker(
       // Subtitle options (new)
       subtitleLanguage = "auto",
       subtitleTask = "transcribe",
+      thumbnailPath,
     } = job.data;
 
     console.log(`[Worker] Start processing job ${job.id} for video ${videoId}`);
@@ -83,6 +84,7 @@ const worker = new Worker(
         await processVideo(videoPath, videoId, {
           language: subtitleLanguage,
           task: subtitleTask,
+          thumbnailPath,
         });
 
       if (!masterUrl || !variants) {

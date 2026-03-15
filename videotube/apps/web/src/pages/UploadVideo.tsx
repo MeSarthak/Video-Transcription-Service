@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Upload, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Upload, CheckCircle, XCircle, Loader2, Film, X } from "lucide-react";
 import api from "../lib/api";
 import { fetchVideoStatus, queryKeys } from "../lib/queries";
 import type { ApiResponse } from "../types";
@@ -19,9 +19,7 @@ const uploadSchema = z.object({
       (f) => f && f[0] && f[0].size <= 2000 * 1024 * 1024,
       "Video must be 2GB or less"
     ),
-  thumbnail: z
-    .custom<FileList>()
-    .optional(),
+  thumbnail: z.custom<FileList>().optional(),
 });
 
 type UploadForm = z.infer<typeof uploadSchema>;
@@ -31,6 +29,67 @@ interface UploadResult {
   status: "pending";
 }
 
+// Number of frames to extract for the picker
+const FRAME_COUNT = 5;
+
+/** Extract `count` frames evenly distributed across the video duration.
+ *  Returns an array of data-URLs (jpeg). */
+async function extractFrames(file: File, count: number): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+
+    const objectUrl = URL.createObjectURL(file);
+    video.src = objectUrl;
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d")!;
+    const frames: string[] = [];
+    let current = 0;
+
+    const capture = () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      frames.push(canvas.toDataURL("image/jpeg", 0.85));
+      current++;
+
+      if (current < count) {
+        // Seek to next position
+        const fraction = (current + 1) / (count + 1);
+        video.currentTime = video.duration * fraction;
+      } else {
+        URL.revokeObjectURL(objectUrl);
+        resolve(frames);
+      }
+    };
+
+    video.addEventListener("loadedmetadata", () => {
+      // Seek to first position (avoid very start which may be black)
+      video.currentTime = video.duration * (1 / (count + 1));
+    });
+
+    video.addEventListener("seeked", capture);
+
+    video.addEventListener("error", () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Failed to load video for frame extraction"));
+    });
+  });
+}
+
+/** Convert a data-URL to a File object */
+function dataUrlToFile(dataUrl: string, filename: string): File {
+  const [header, data] = dataUrl.split(",");
+  const mime = header.match(/:(.*?);/)?.[1] ?? "image/jpeg";
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], filename, { type: mime });
+}
+
 export function UploadVideo() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -38,6 +97,16 @@ export function UploadVideo() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
   const [videoName, setVideoName] = useState<string | null>(null);
+
+  // Frame picker state
+  const [videoFrames, setVideoFrames] = useState<string[]>([]);
+  const [extractingFrames, setExtractingFrames] = useState(false);
+  const [selectedFrame, setSelectedFrame] = useState<string | null>(null);
+  // Holds a File derived from a picked frame (injected into the form submission)
+  const frameFileRef = useRef<File | null>(null);
+  // Whether the user has chosen a real image file (vs a frame)
+  const [hasImageFile, setHasImageFile] = useState(false);
+
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { register, handleSubmit, formState: { errors } } = useForm<UploadForm>({
@@ -65,8 +134,12 @@ export function UploadVideo() {
       formData.append("title", data.title);
       formData.append("description", data.description || "");
       formData.append("video", data.video[0]!);
+
+      // Priority: uploaded image file > picked frame
       if (data.thumbnail && data.thumbnail.length > 0) {
         formData.append("thumbnail", data.thumbnail[0]!);
+      } else if (frameFileRef.current) {
+        formData.append("thumbnail", frameFileRef.current);
       }
 
       const res = await api.post<ApiResponse<UploadResult>>("/videos/upload", formData, {
@@ -102,6 +175,48 @@ export function UploadVideo() {
     mutation.mutate(data);
   };
 
+  /** Called when the user selects a video file — extract preview frames */
+  const handleVideoChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const f = e.target.files?.[0];
+      if (f) {
+        setVideoName(f.name);
+        // Reset any previously picked frame/thumbnail
+        setSelectedFrame(null);
+        setVideoFrames([]);
+        frameFileRef.current = null;
+        if (!hasImageFile) setThumbnailPreview(null);
+
+        setExtractingFrames(true);
+        try {
+          const frames = await extractFrames(f, FRAME_COUNT);
+          setVideoFrames(frames);
+        } catch {
+          // Silently ignore — frame picker just won't show
+        } finally {
+          setExtractingFrames(false);
+        }
+      }
+      videoOnChange(e);
+    },
+    [videoOnChange, hasImageFile]
+  );
+
+  /** User picks a frame from the picker */
+  const handleFramePick = (dataUrl: string) => {
+    setSelectedFrame(dataUrl);
+    setThumbnailPreview(dataUrl);
+    frameFileRef.current = dataUrlToFile(dataUrl, "thumbnail.jpg");
+  };
+
+  /** User clears the current thumbnail selection (reverts to auto) */
+  const clearThumbnail = () => {
+    setThumbnailPreview(null);
+    setSelectedFrame(null);
+    setHasImageFile(false);
+    frameFileRef.current = null;
+  };
+
   // ── Post-upload status screen ─────────────────
   if (uploadedVideoId) {
     const status = statusData?.status;
@@ -127,6 +242,10 @@ export function UploadVideo() {
                 setUploadProgress(0);
                 setVideoName(null);
                 setThumbnailPreview(null);
+                setVideoFrames([]);
+                setSelectedFrame(null);
+                setHasImageFile(false);
+                frameFileRef.current = null;
                 mutation.reset();
               }}
               className="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium"
@@ -180,7 +299,7 @@ export function UploadVideo() {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   Click to select or drag & drop your video
                 </p>
-                <p className="text-xs text-gray-400 mt-1">MP4, MOV, AVI — max 500MB</p>
+                <p className="text-xs text-gray-400 mt-1">MP4, MOV, AVI — max 2GB</p>
               </>
             )}
             <input
@@ -189,11 +308,7 @@ export function UploadVideo() {
               type="file"
               accept="video/*"
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) setVideoName(f.name);
-                videoOnChange(e);
-              }}
+              onChange={handleVideoChange}
             />
           </div>
           {errors.video && (
@@ -233,31 +348,110 @@ export function UploadVideo() {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Thumbnail <span className="text-gray-400 font-normal">(optional)</span>
           </label>
-          <div className="flex items-center gap-4">
-            {thumbnailPreview ? (
-              <img
-                src={thumbnailPreview}
-                alt="Thumbnail preview"
-                className="w-32 aspect-video object-cover rounded-lg border border-gray-300"
-              />
-            ) : (
-              <div className="w-32 aspect-video bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 text-xs">
-                No image
-              </div>
-            )}
-            <input
-              {...thumbRest}
-              ref={thumbRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="block text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:text-gray-400"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) setThumbnailPreview(URL.createObjectURL(f));
-                thumbOnChange(e);
-              }}
-            />
+
+          <div className="flex items-start gap-4">
+            {/* Preview box */}
+            <div className="relative flex-shrink-0">
+              {thumbnailPreview ? (
+                <>
+                  <img
+                    src={thumbnailPreview}
+                    alt="Thumbnail preview"
+                    className="w-36 aspect-video object-cover rounded-lg border border-gray-300 dark:border-gray-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={clearThumbnail}
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-gray-700 text-white flex items-center justify-center hover:bg-red-600 transition-colors"
+                    title="Clear thumbnail"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </>
+              ) : (
+                <div className="w-36 aspect-video bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center text-gray-400 text-xs gap-1">
+                  <Film className="w-5 h-5" />
+                  <span>Auto</span>
+                </div>
+              )}
+            </div>
+
+            {/* Controls */}
+            <div className="flex flex-col gap-2 pt-1">
+              <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                <Upload className="w-4 h-4" />
+                Upload image
+                <input
+                  {...thumbRest}
+                  ref={thumbRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      setThumbnailPreview(URL.createObjectURL(f));
+                      setSelectedFrame(null);
+                      setHasImageFile(true);
+                      frameFileRef.current = null;
+                    }
+                    thumbOnChange(e);
+                  }}
+                />
+              </label>
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                {thumbnailPreview
+                  ? hasImageFile
+                    ? "Custom image selected"
+                    : "Frame selected from video"
+                  : "No thumbnail — one will be auto-generated"}
+              </p>
+            </div>
           </div>
+
+          {/* Frame picker — shown after video is selected and no image file chosen */}
+          {videoName && !hasImageFile && (
+            <div className="mt-3">
+              {extractingFrames ? (
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Extracting frames…
+                </div>
+              ) : videoFrames.length > 0 ? (
+                <>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    Or pick a frame from your video:
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    {videoFrames.map((frame, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => handleFramePick(frame)}
+                        className={`relative rounded-md overflow-hidden border-2 transition-all focus:outline-none ${
+                          selectedFrame === frame
+                            ? "border-indigo-500 ring-2 ring-indigo-400"
+                            : "border-gray-300 dark:border-gray-600 hover:border-indigo-400"
+                        }`}
+                        title={`Use frame ${i + 1}`}
+                      >
+                        <img
+                          src={frame}
+                          alt={`Frame ${i + 1}`}
+                          className="w-24 aspect-video object-cover block"
+                        />
+                        {selectedFrame === frame && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-indigo-500/20">
+                            <CheckCircle className="w-5 h-5 text-indigo-600 drop-shadow" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          )}
         </div>
 
         {/* Upload progress */}

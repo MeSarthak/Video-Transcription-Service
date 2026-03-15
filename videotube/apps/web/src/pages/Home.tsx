@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { Search } from "lucide-react";
 import { VideoCard } from "../components/VideoCard";
 import { fetchVideos, queryKeys } from "../lib/queries";
 
@@ -14,48 +13,19 @@ const SORT_OPTIONS = [
 export function Home() {
   const [searchParams] = useSearchParams();
   const urlQuery = searchParams.get("q") ?? "";
-  const [search, setSearch] = useState(urlQuery);
-  const [inputValue, setInputValue] = useState(urlQuery);
   const [sortIdx, setSortIdx] = useState(0);
   const sort = SORT_OPTIONS[sortIdx]!;
 
-  // Sync when URL query param changes (navbar search)
-  useEffect(() => {
-    setSearch(urlQuery);
-    setInputValue(urlQuery);
-  }, [urlQuery]);
-
   const { data, isLoading, isError } = useQuery({
-    queryKey: queryKeys.videos({ query: search, sortBy: sort.sortBy, sortType: sort.sortType }),
+    queryKey: queryKeys.videos({ query: urlQuery, sortBy: sort.sortBy, sortType: sort.sortType }),
     queryFn: () =>
-      fetchVideos({ query: search || undefined, sortBy: sort.sortBy, sortType: sort.sortType }),
+      fetchVideos({ query: urlQuery || undefined, sortBy: sort.sortBy, sortType: sort.sortType }),
   });
 
   const videos = data?.docs ?? [];
 
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    setSearch(inputValue.trim());
-  }
-
   return (
     <div>
-      {/* Search bar (mobile — desktop is in Navbar) */}
-      <form onSubmit={handleSearch} className="flex gap-2 mb-6 sm:hidden">
-        <input
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          placeholder="Search videos…"
-          className="flex-1 px-4 py-2 border border-gray-300 rounded-full text-sm focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
-        />
-        <button
-          type="submit"
-          className="px-4 py-2 bg-gray-100 border border-gray-300 rounded-full hover:bg-gray-200 dark:bg-gray-700 dark:border-gray-600"
-        >
-          <Search className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-        </button>
-      </form>
-
       {/* Sort pills */}
       <div className="flex gap-2 mb-6 flex-wrap">
         {SORT_OPTIONS.map((opt, i) => (
@@ -100,7 +70,7 @@ export function Home() {
 
       {!isLoading && !isError && videos.length === 0 && (
         <div className="text-center py-20 text-gray-500 dark:text-gray-400">
-          <p className="text-lg">{search ? `No results for "${search}"` : "No videos yet."}</p>
+          <p className="text-lg">{urlQuery ? `No results for "${urlQuery}"` : "No videos yet."}</p>
         </div>
       )}
 

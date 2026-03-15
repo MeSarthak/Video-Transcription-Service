@@ -77,7 +77,7 @@ export const PAGINATION = {
 // Upload limits
 // ──────────────────────────────────────────
 export const UPLOAD_LIMITS = {
-  VIDEO_MAX_SIZE: 500 * 1024 * 1024, // 500MB
+  VIDEO_MAX_SIZE: 2000 * 1024 * 1024, // 2GB
   IMAGE_MAX_SIZE: 5 * 1024 * 1024, // 5MB
   JSON_BODY_LIMIT: '16kb',
 } as const;

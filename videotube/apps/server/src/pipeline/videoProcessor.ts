@@ -18,6 +18,7 @@ import {
 interface TranscriptionOptions {
   language?: string;
   task?: string;
+  thumbnailPath?: string;
 }
 
 /**
@@ -156,11 +157,24 @@ const processVideo = async (
     console.log(
       `[VideoProcessor] Step 2: Generating Thumbnail and calculating Duration...`
     );
-    const [thumbnailLocal, duration] = await Promise.all([
-      generateThumbnail(normalizedPath, videoId),
-      getVideoDuration(normalizedPath),
-    ]);
-    console.log(`[VideoProcessor] Thumbnail generated: ${thumbnailLocal}`);
+
+    let thumbnailLocal: string;
+    if (subtitleOptions.thumbnailPath && fs.existsSync(subtitleOptions.thumbnailPath)) {
+      // User supplied a thumbnail — copy it into the expected location
+      const outDir = path.join("public", "temp", videoId);
+      fs.mkdirSync(outDir, { recursive: true });
+      const destPath = path.join(outDir, "thumb.jpg");
+      fs.copyFileSync(subtitleOptions.thumbnailPath, destPath);
+      // Clean up the uploaded thumbnail temp file
+      try { fs.unlinkSync(subtitleOptions.thumbnailPath); } catch {}
+      thumbnailLocal = destPath;
+      console.log(`[VideoProcessor] Using user-supplied thumbnail: ${thumbnailLocal}`);
+    } else {
+      thumbnailLocal = await generateThumbnail(normalizedPath, videoId) as string;
+      console.log(`[VideoProcessor] Thumbnail generated: ${thumbnailLocal}`);
+    }
+
+    const duration = await getVideoDuration(normalizedPath);
     console.log(`[VideoProcessor] Video Duration: ${duration}`);
 
     // Step 4: Master playlist generate

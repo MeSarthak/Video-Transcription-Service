@@ -22,6 +22,7 @@ export interface VideoProcessingJobData {
   description: string;
   subtitleLanguage: string;
   subtitleTask: 'transcribe' | 'translate';
+  thumbnailPath?: string;
 }
 
 export async function addVideoToQueue(data: VideoProcessingJobData) {

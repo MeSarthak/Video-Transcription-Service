@@ -1,14 +1,16 @@
-import { useParams, Link } from "react-router-dom";
+import { useState } from "react";
+import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, BellOff } from "lucide-react";
-import { fetchChannel, fetchChannelVideos, toggleSubscription, queryKeys } from "../lib/queries";
+import { Bell, BellOff, Trash2 } from "lucide-react";
+import { fetchChannel, fetchChannelVideos, toggleSubscription, deleteVideo, queryKeys } from "../lib/queries";
 import { VideoCard } from "../components/VideoCard";
 import { useAuth } from "../context/AuthContext";
 
 export function Channel() {
   const { username } = useParams<{ username: string }>();
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const {
     data: channel,
@@ -41,6 +43,26 @@ export function Channel() {
     },
   });
 
+  const deleteVideoMutation = useMutation({
+    mutationFn: (videoId: string) => deleteVideo(videoId),
+    onSuccess: (_, videoId) => {
+      setConfirmDeleteId(null);
+      // Remove from channel videos cache
+      queryClient.setQueryData(
+        queryKeys.channelVideos(channel!._id),
+        (old: any) =>
+          old
+            ? {
+                ...old,
+                docs: old.docs.filter((v: any) => v._id !== videoId),
+                totalDocs: old.totalDocs - 1,
+              }
+            : old,
+      );
+      queryClient.invalidateQueries({ queryKey: ["videos"] });
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="animate-pulse max-w-screen-lg mx-auto">
@@ -65,6 +87,7 @@ export function Channel() {
   }
 
   const videos = videosData?.docs ?? [];
+  const isOwner = isAuthenticated && user?._id === channel._id;
 
   return (
     <div className="max-w-screen-lg mx-auto">
@@ -97,7 +120,7 @@ export function Channel() {
           </p>
         </div>
 
-        {isAuthenticated && (
+        {isAuthenticated && !isOwner && (
           <button
             onClick={() => subMutation.mutate()}
             disabled={subMutation.isPending}
@@ -145,11 +168,59 @@ export function Channel() {
         {!videosLoading && videos.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {videos.map((video) => (
-              <VideoCard key={video._id} video={video} />
+              <div key={video._id} className="relative group">
+                <VideoCard video={video} />
+                {isOwner && (
+                  <button
+                    onClick={() => setConfirmDeleteId(video._id)}
+                    title="Delete video"
+                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Delete confirm dialog */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Delete video?</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+              This will permanently delete the video and all its data. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                disabled={deleteVideoMutation.isPending}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteVideoMutation.mutate(confirmDeleteId)}
+                disabled={deleteVideoMutation.isPending}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {deleteVideoMutation.isPending ? (
+                  <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Deleting…</>
+                ) : (
+                  <><Trash2 className="w-4 h-4" /> Delete</>
+                )}
+              </button>
+            </div>
+            {deleteVideoMutation.isError && (
+              <p className="mt-3 text-xs text-red-500">
+                {(deleteVideoMutation.error as any)?.response?.data?.message ?? "Delete failed. Please try again."}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

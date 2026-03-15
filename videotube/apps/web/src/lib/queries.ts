@@ -50,6 +50,10 @@ export async function incrementView(videoId: string): Promise<void> {
   await api.patch(`/videos/${videoId}/views`);
 }
 
+export async function deleteVideo(videoId: string): Promise<void> {
+  await api.delete(`/videos/${videoId}`);
+}
+
 export async function addToWatchHistory(videoId: string): Promise<void> {
   await api.post(`/users/watch-history/${videoId}`);
 }

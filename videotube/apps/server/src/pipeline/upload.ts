@@ -152,6 +152,29 @@ export const uploadSubtitleFiles = async (localFiles: any, videoId: any) => {
 };
 
 /**
+ * Delete all blobs under a given prefix (e.g. all files for a videoId)
+ *
+ * @param {string} prefix - Blob name prefix, e.g. "<videoId>/"
+ */
+export const deleteBlobsByPrefix = async (prefix: string) => {
+  try {
+    const blobClient = getBlobServiceClient();
+    const containerClient = blobClient.getContainerClient(containerName);
+
+    const deleted: string[] = [];
+    for await (const blob of containerClient.listBlobsFlat({ prefix })) {
+      await containerClient.deleteBlob(blob.name);
+      deleted.push(blob.name);
+    }
+
+    return deleted;
+  } catch (error) {
+    console.error(`[Upload] Failed to delete blobs with prefix "${prefix}":`, error);
+    throw error;
+  }
+};
+
+/**
  * Upload a single file to Azure Blob Storage
  *
  * @param {string} localPath - Path to local file
