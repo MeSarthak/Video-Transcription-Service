@@ -11,6 +11,7 @@ export const uploadHLSVideo = asyncHandler(async (req: Request, res: Response) =
 
   const files = req.files as Record<string, Express.Multer.File[]> | undefined;
   const videoFile = files?.video?.[0] || req.file;
+  const thumbnailFile = files?.thumbnail?.[0];
 
   if (!videoFile) {
     throw new ApiError(400, 'Video file is required');
@@ -23,6 +24,7 @@ export const uploadHLSVideo = asyncHandler(async (req: Request, res: Response) =
     ownerId: user._id,
     subtitleLanguage: subtitleLanguage || 'auto',
     subtitleTask: subtitleTask || 'transcribe',
+    thumbnailPath: thumbnailFile?.path,
   });
 
   ApiResponse.send(res, 202, { videoId: video._id, status: 'pending' }, 'Video queued for processing');
@@ -59,4 +61,11 @@ export const incrementViewCount = asyncHandler(async (req: Request, res: Respons
   const videoId = req.params.videoId as string;
   await videoService.incrementViewCount(videoId);
   ApiResponse.send(res, 200, null, 'View count incremented');
+});
+
+export const deleteVideo = asyncHandler(async (req: Request, res: Response) => {
+  const { user } = req as AuthenticatedRequest;
+  const videoId = req.params.videoId as string;
+  await videoService.deleteVideo(videoId, user._id);
+  ApiResponse.send(res, 200, null, 'Video deleted successfully');
 });
