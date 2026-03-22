@@ -37,3 +37,6 @@ coverage/
 
 # Docker
 .docker/
+
+# Custom folders
+documentation/
